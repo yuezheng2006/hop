@@ -3,6 +3,13 @@ const fx = window.hopFx;
 const params = new URLSearchParams(location.search);
 document.body.classList.add(`platform-${params.get('platform') || 'web'}`, `material-${params.get('material') || 'none'}`);
 
+const locale = window.hopI18n.normalize(params.get('lang') || navigator.language);
+const t = window.hopI18n.create(locale);
+document.documentElement.lang = locale;
+for (const node of document.querySelectorAll('[data-i18n]')) node.textContent = t(node.dataset.i18n);
+for (const node of document.querySelectorAll('[data-i18n-title]')) node.title = t(node.dataset.i18nTitle);
+for (const node of document.querySelectorAll('[data-i18n-label]')) node.setAttribute('aria-label', t(node.dataset.i18nLabel));
+
 const $ = (id) => document.getElementById(id);
 const els = {
   stage: $('stage'),
@@ -54,12 +61,12 @@ const state = {
 
 // ---------- formatting ----------
 
-const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
-const plural = new Intl.PluralRules('en-US');
+const number = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
+const plural = new Intl.PluralRules(locale);
 
 // Base 1000, like Finder and the rest of Apple's software.
 function formatBytes(bytes) {
-  if (bytes < 1000) return `${bytes} ${plural.select(bytes) === 'one' ? 'byte' : 'bytes'}`;
+  if (bytes < 1000) return `${bytes} ${plural.select(bytes) === 'one' ? t("byte") : t("bytes")}`;
   const units = ['KB', 'MB', 'GB', 'TB'];
   let value = bytes / 1000;
   let unit = 0;
@@ -71,7 +78,7 @@ function formatBytes(bytes) {
 }
 
 const pluralize = (n, one, other) => `${n} ${plural.select(n) === 'one' ? one : other}`;
-const files = (n) => pluralize(n, 'file', 'files');
+const files = (n) => pluralize(n, t("file"), t("files"));
 const percent = (sent, total) => (total ? Math.floor((sent / total) * 100) : 100);
 
 function shortPath(dir) {
@@ -192,11 +199,11 @@ function renderHint() {
   const count = state.peers.size;
   els.hint.classList.toggle('searching', count === 0);
   if (count === 0) {
-    els.hintTitle.textContent = 'Looking for nearby devices';
-    els.hintSub.textContent = 'Open Hop on another computer on the same Wi‑Fi network.';
+    els.hintTitle.textContent = t("Looking for nearby devices");
+    els.hintSub.textContent = t("Open Hop on another computer on the same Wi\u2011Fi network.");
   } else {
-    els.hintTitle.textContent = 'Drag files onto a device to send them';
-    els.hintSub.textContent = 'Or click a device to choose files.';
+    els.hintTitle.textContent = t("Drag files onto a device to send them");
+    els.hintSub.textContent = t("Or click a device to choose files.");
   }
 }
 
@@ -217,22 +224,22 @@ function renderActivity(peerId) {
   if (act.result === 'done') {
     node.classList.add('success');
     status.classList.add('green');
-    status.textContent = act.dir === 'out' ? 'Sent' : 'Received';
+    status.textContent = act.dir === 'out' ? t("Sent") : t("Received");
   } else if (act.result === 'declined') {
     status.classList.add('red');
-    status.textContent = 'Declined';
+    status.textContent = t("Declined");
   } else if (act.result === 'failed') {
     status.classList.add('red');
-    status.textContent = 'Failed';
+    status.textContent = t("Failed");
   } else if (act.stage === 'waiting') {
     node.classList.add('busy', 'waiting', 'cancellable');
-    status.textContent = 'Waiting…';
+    status.textContent = t("Waiting\u2026");
   } else {
     node.classList.add('busy');
     if (act.dir === 'out') node.classList.add('cancellable');
     status.classList.add('blue');
     const p = percent(act.sent, act.total);
-    status.textContent = `${act.dir === 'out' ? 'Sending' : 'Receiving'} · ${p}%`;
+    status.textContent = `${act.dir === 'out' ? t("Sending") : t("Receiving")} · ${p}%`;
     bar.style.strokeDashoffset = RING_LENGTH * (1 - p / 100);
   }
 }
@@ -350,8 +357,8 @@ function fly(paths, from, targetAvatar, { burst = false } = {}) {
   if (!targetAvatar) return Promise.resolve();
   const name = baseName(paths[0]);
   const flyer = el('div', 'flyer');
-  flyer.append(text('div', 'file', paths.length > 1 ? paths.length : extLabel(name)));
-  flyer.append(text('span', '', paths.length > 1 ? `${name} and ${paths.length - 1} more` : name));
+  flyer.append(text('div', t("file"), paths.length > 1 ? paths.length : extLabel(name)));
+  flyer.append(text('span', '', paths.length > 1 ? t("{0} and {1} more", name, paths.length - 1) : name));
   document.body.append(flyer);
 
   const box = flyer.getBoundingClientRect();
@@ -433,9 +440,9 @@ function soleTarget() {
 
 function updateDropLabel() {
   const target = state.dropTarget || soleTarget();
-  if (state.peers.size === 0) els.dropLabel.textContent = 'No devices nearby';
-  else if (target) els.dropLabel.textContent = `Release to send to ${state.peers.get(target)?.name}`;
-  else els.dropLabel.textContent = 'Drop onto a device';
+  if (state.peers.size === 0) els.dropLabel.textContent = t("No devices nearby");
+  else if (target) els.dropLabel.textContent = t("Release to send to {0}", state.peers.get(target)?.name);
+  else els.dropLabel.textContent = t("Drop onto a device");
 }
 
 // While dragging, a beam of light joins this device to wherever the files will go.
@@ -515,11 +522,11 @@ window.addEventListener('drop', (e) => {
   const paths = [...(e.dataTransfer?.files || [])].map((file) => api.pathForFile(file)).filter(Boolean);
   if (!paths.length) return;
   if (!target) {
-    toast(state.peers.size ? 'Drop the files right onto a device.' : 'There are no devices nearby yet.');
+    toast(state.peers.size ? t("Drop the files right onto a device.") : t("There are no devices nearby yet."));
     return;
   }
   if (busy(target)) {
-    toast('Wait for the current transfer to finish.');
+    toast(t("Wait for the current transfer to finish."));
     return;
   }
   fly(paths, { x: e.clientX, y: e.clientY }, peerAvatar(target), { burst: true }).then(() => send(target, paths));
@@ -559,25 +566,25 @@ function showOffer(offer) {
   const sheet = el('div', 'sheet');
   sheet.dataset.offer = offer.id;
   const what = offer.fileCount === 1 && offer.names.length === 1 ? offer.names[0] : files(offer.fileCount);
-  const { head } = sheetHead(offer.from, `${offer.from.name} would like to share`, `${what} · ${formatBytes(offer.totalBytes)}`);
+  const { head } = sheetHead(offer.from, t("{0} would like to share", offer.from.name), `${what} · ${formatBytes(offer.totalBytes)}`);
   sheet.append(head);
 
   if (offer.names.length > 1 || offer.fileCount > 1) {
     const chips = el('div', 'chips');
     for (const name of offer.names.slice(0, 6)) chips.append(text('span', 'chip', name));
-    if (offer.names.length > 6) chips.append(text('span', 'chip', `${offer.names.length - 6} more`));
+    if (offer.names.length > 6) chips.append(text('span', 'chip', t("{0} more", offer.names.length - 6)));
     sheet.append(chips);
   }
 
   const check = el('label', 'check');
   const box = document.createElement('input');
   box.type = 'checkbox';
-  check.append(box, document.createTextNode('Always accept from this device'));
+  check.append(box, document.createTextNode(t("Always accept from this device")));
   sheet.append(check);
 
   const actions = el('div', 'actions');
-  const decline = text('button', 'btn', 'Decline');
-  const accept = text('button', 'btn primary', 'Accept');
+  const decline = text('button', 'btn', t("Decline"));
+  const accept = text('button', 'btn primary', t("Accept"));
   actions.append(decline, accept);
   sheet.append(actions);
 
@@ -599,7 +606,7 @@ const incoming = new Map(); // transfer id -> { sheet, bar, sub }
 
 function showIncoming(e) {
   const sheet = el('div', 'sheet');
-  const { head, subNode } = sheetHead(e.from, `Receiving from ${e.from.name}`, `${files(e.fileCount)} · ${formatBytes(e.totalBytes)}`);
+  const { head, subNode } = sheetHead(e.from, t("Receiving from {0}", e.from.name), `${files(e.fileCount)} · ${formatBytes(e.totalBytes)}`);
   const progress = el('div', 'progress', '<span></span>');
   sheet.append(head, progress);
   addSheet(sheet);
@@ -612,11 +619,11 @@ function finishIncoming(e) {
   if (!item) return;
   item.sheet.classList.add('done');
   item.bar.style.width = '100%';
-  item.sheet.querySelector('.sheet-title').textContent = `Received from ${e.from.name}`;
+  item.sheet.querySelector('.sheet-title').textContent = t("Received from {0}", e.from.name);
   item.sub.textContent = e.fileCount === 1 ? baseName(e.paths[0]) : `${files(e.fileCount)} · ${formatBytes(e.totalBytes)}`;
   const actions = el('div', 'actions');
-  const close = text('button', 'btn', 'Done');
-  const show = text('button', 'btn primary', state.self?.platform === 'darwin' ? 'Show in Finder' : 'Show in Folder');
+  const close = text('button', 'btn', t("Done"));
+  const show = text('button', 'btn primary', state.self?.platform === 'darwin' ? t("Show in Finder") : t("Show in Folder"));
   actions.append(close, show);
   item.sheet.append(actions);
   close.addEventListener('click', () => closeSheet(item.sheet));
@@ -631,7 +638,7 @@ function failIncoming(e) {
   const item = incoming.get(e.id);
   incoming.delete(e.id);
   if (item) closeSheet(item.sheet);
-  toast(`The transfer from ${e.from.name} was interrupted.`);
+  toast(t("The transfer from {0} was interrupted.", e.from.name));
 }
 
 function toast(message) {
@@ -665,7 +672,7 @@ function handle(event) {
       else if (event.declined) settleActivity(event.peerId, 'declined', 'out');
       else {
         settleActivity(event.peerId, 'failed', 'out');
-        toast(`Couldn’t send: ${event.error}`);
+        toast(t("Couldn’t send: {0}", event.error));
       }
       break;
     case 'offer':
@@ -692,7 +699,7 @@ function handle(event) {
       if (item) {
         const p = percent(event.sent, event.total);
         item.bar.style.width = `${p}%`;
-        item.sub.textContent = `${formatBytes(event.sent)} of ${formatBytes(event.total)} · ${p}%`;
+        item.sub.textContent = t("{0} of {1} · {2}%", formatBytes(event.sent), formatBytes(event.total), p);
       }
       const act = state.activity.get(event.from.id);
       if (act?.dir === 'in' && !act.result) {
@@ -727,7 +734,7 @@ function renderSelf() {
   els.meAvatar.className = `avatar me-avatar ${platform}`;
   els.meAvatar.innerHTML = glyphFor(state.self.platform);
   els.meName.textContent = state.self.name;
-  els.meCaption.textContent = { darwin: 'This Mac', win32: 'This PC' }[platform] || 'This device';
+  els.meCaption.textContent = { darwin: t("This Mac"), win32: t("This PC") }[platform] || t("This device");
 }
 
 function startRename() {
@@ -763,7 +770,7 @@ function renderDownloads() {
 function setTrustedCount(count) {
   state.trustedCount = count;
   els.forgetTrusted.hidden = els.trustedDot.hidden = count === 0;
-  els.forgetTrusted.textContent = `Forget ${pluralize(count, 'trusted device', 'trusted devices')}`;
+  els.forgetTrusted.textContent = t("Forget {0}", pluralize(count, t("trusted device"), t("trusted devices")));
 }
 
 els.openDownloads.addEventListener('click', () => api.openDownloads());
