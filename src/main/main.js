@@ -8,6 +8,10 @@ const { Settings } = require('./settings');
 const { Discovery } = require('./discovery');
 const { TransferServer, sendFiles } = require('./transfer');
 
+const { create, normalize } = require('../shared/i18n');
+let locale;
+let t = create('en');
+
 const OFFER_TIMEOUT_MS = 60 * 1000;
 const SHOW_FALLBACK_MS = 4000;
 const isMac = process.platform === 'darwin';
@@ -81,7 +85,7 @@ function notify(body) {
 
 // “IMG_2041.HEIC” for a single file, “3 files” otherwise.
 function describeFiles(count, firstName) {
-  return count === 1 && firstName ? `“${firstName}”` : `${count} ${count === 1 ? 'file' : 'files'}`;
+  return count === 1 && firstName ? `“${firstName}”` : `${count} ${count === 1 ? t("file") : t("files")}`;
 }
 
 const THEMES = ['system', 'light', 'dark'];
@@ -126,7 +130,7 @@ function createWindow() {
   log(`window created, material=${material}`);
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(__dirname, '../renderer/index.html'), {
-    query: { platform: process.platform, material },
+    query: { platform: process.platform, material, lang: locale },
   });
   win.once('ready-to-show', () => {
     log('ready-to-show');
@@ -166,10 +170,10 @@ function createTray() {
   tray.setToolTip('Hop');
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open Hop', click: showWindow },
-      { label: 'Show Received Files', click: () => shell.openPath(settings.get('downloadDir')) },
+      { label: t("Open Hop"), click: showWindow },
+      { label: t("Show Received Files"), click: () => shell.openPath(settings.get('downloadDir')) },
       { type: 'separator' },
-      { label: 'Quit Hop', click: () => app.quit() },
+      { label: t("Quit Hop"), click: () => app.quit() },
     ]),
   );
   tray.on('click', showWindow);
@@ -187,7 +191,7 @@ function decide(offer) {
   emit({ type: 'offer', offer });
   if (!win.isFocused()) {
     win.flashFrame(true);
-    notify(`${offer.from.name} would like to share ${describeFiles(offer.fileCount, offer.names[0])}.`);
+    notify(t("{0} would like to share {1}.", offer.from.name, describeFiles(offer.fileCount, offer.names[0])));
   }
 
   return new Promise((resolve) => {
@@ -227,7 +231,7 @@ function registerIpc() {
 
   ipcMain.handle('hop:send', (_event, peerId, paths) => {
     const peer = discovery.get(peerId);
-    if (!peer) throw new Error('This device is no longer online.');
+    if (!peer) throw new Error(t("This device is no longer online."));
     const id = crypto.randomUUID();
     const controller = new AbortController();
     outgoing.set(id, controller);
@@ -270,8 +274,8 @@ function registerIpc() {
 
   ipcMain.handle('hop:pick', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      title: 'Choose Files to Send',
-      buttonLabel: 'Send',
+      title: t("Choose Files to Send"),
+      buttonLabel: t("Send"),
       // Windows can't mix files and folders in one dialog; macOS can.
       properties: ['openFile', 'multiSelections', ...(isMac ? ['openDirectory'] : [])],
     });
@@ -287,8 +291,8 @@ function registerIpc() {
 
   ipcMain.handle('hop:choose-download-dir', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      title: 'Choose Where to Save Received Files',
-      buttonLabel: 'Choose',
+      title: t("Choose Where to Save Received Files"),
+      buttonLabel: t("Choose"),
       defaultPath: settings.get('downloadDir'),
       properties: ['openDirectory', 'createDirectory'],
     });
@@ -313,6 +317,8 @@ function registerIpc() {
 
 async function start() {
   log('app ready');
+  locale = normalize(process.env.HOP_LANG || app.getLocale());
+  t = create(locale);
   settings = new Settings(app.getPath('userData'), {
     name: defaultDeviceName() + (profile ? ` (${profile})` : ''),
     downloadDir: path.join(app.getPath('downloads'), 'Hop'),
@@ -336,7 +342,7 @@ async function start() {
   server.on('failed', (e) => emit({ type: 'receive-failed', ...e }));
   server.on('done', (e) => {
     emit({ type: 'receive-done', ...e });
-    notify(`${e.from.name} sent you ${describeFiles(e.fileCount, path.basename(e.paths[0]))}.`);
+    notify(t("{0} sent you {1}.", e.from.name, describeFiles(e.fileCount, path.basename(e.paths[0]))));
   });
 
   discovery = new Discovery({ ...selfInfo(), port });
@@ -360,7 +366,7 @@ if (!profile && !app.requestSingleInstanceLock()) {
     .then(start)
     .catch((err) => {
       log('startup failed:', err.stack || err);
-      dialog.showErrorBox('Hop couldn’t start', String(err.stack || err));
+      dialog.showErrorBox(t("Hop couldn\u2019t start"), String(err.stack || err));
       app.exit(1);
     });
   app.on('activate', showWindow);

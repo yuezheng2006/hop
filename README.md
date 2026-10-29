@@ -1,3 +1,5 @@
+> 简体中文：请阅读 [中文说明与能力分析](README.zh-CN.md)。此 fork 支持中文和英文桌面界面，跟随系统语言，也可使用 `HOP_LANG=zh-CN` 或 `HOP_LANG=en` 启动。
+
 <p align="center"><img src="build/icon.png" width="128" alt="Hop"></p>
 
 <h1 align="center">Hop</h1>
